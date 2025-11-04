@@ -31,7 +31,11 @@ with open(str(input_directory / "config.toml"), "rb") as f:
 assert len(config['mascot_filename']) == len(config['sample_name']), "Number of mascot files and sample names do not match"
 
 sample_names = config['sample_name']
-logo_file,output_path = iolo.file_check(config['analysis_name'])
+logo_file = iolo.get_logo_file()
+
+output_path = input_directory / "output"
+output_path.mkdir(parents=False, exist_ok=True)
+
 log_filename = output_path / "run.log"
 plot_path = output_path / "plots"
 if not plot_path.exists():
@@ -44,7 +48,7 @@ if re.search('[A-Z]', search_protein):
     uniprot_id_check = True
 
 if not uniprot_id_check:
-    mrc_db_path = "mrc_db\\fasta_formated_version\\" + config['mrc_db']
+    mrc_db_path = "Z:\\proteinchem\\CURRENT MRC DATABASE\\" + config['mrc_db']
     mrc_db = iolo.mrc_db_to_dict(mrc_db_path)
     POI_record = mrc_db[search_protein]
 elif uniprot_id_check:

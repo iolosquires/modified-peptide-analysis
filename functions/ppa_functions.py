@@ -410,20 +410,13 @@ def get_phospho_positions(mod_dict_list):
             phos_position += str(mod_dict['location']) + 'p'
     return phos_position
 
-def file_check (analysis_name):
+def get_logo_file ():
     
-    analysis_path = Path(os.getcwd())
-    
-    output_path = analysis_path / 'output' / analysis_name
-    logo_file = analysis_path / "logo" / "ppu_logo.png"
-     
-    if not output_path.is_dir():
-        os.mkdir(output_path)
-
+    logo_file = Path(os.getcwd()) / "logo" / "ppu_logo.png"
     
     assert logo_file.exists(), 'logo file does not exist'
     
-    return logo_file,output_path
+    return logo_file
 
 def find_phospho_mod(mod_dict_list):
     
