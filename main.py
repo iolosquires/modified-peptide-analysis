@@ -6,7 +6,6 @@ from itertools import compress
 import pyteomics.mzid as mzid
 import tomllib
 import subprocess
-import sys
 import re
 import pandas as pd
 import argparse
@@ -14,7 +13,6 @@ from pathlib import Path
 import logging
 from fpdf import FPDF
 from tqdm import tqdm
-import sys
 from functions.alphamap_functions import mascot_script_to_alphamap
 
 #parse arguments
@@ -27,34 +25,39 @@ input_directory = Path(args.input_directory)
 with open(str(input_directory / "config.toml"), "rb") as f:
     config = tomllib.load(f)
 
-###do config file, directory, file checks, create log file and output directory
-assert len(config['mascot_filename']) == len(config['sample_name']), "Number of mascot files and sample names do not match"
+#create dataclasses from config
+config = iolodata.configInfo(
+    analysis_name = config['analysis_name'],
+    mascot_filenames = config['mascot_filename'],
+    pd_filenames = config['pd_filename'],
+    sample_names = config['sample_name'],
+    mrc_db = config['mrc_db'],
+    search_protein = config['search_protein'],
+    seq = config['seq'],
+    score_cutoff = config['score_cutoff'],
+    species = config['species'],
+    uniprot_id = config['uniprot_for_plot'],
+    mod_search = config['mod_search']
+)
 
-sample_names = config['sample_name']
-logo_file = iolo.get_logo_file()
+assert len(config.mascot_filenames) == len(config.sample_names), "Number of mascot files and sample names do not match"
 
-output_path = input_directory / "output"
-output_path.mkdir(parents=False, exist_ok=True)
+paths = iolodata.configPathInfo(   
+    input_directory = str(input_directory)
+)
 
-log_filename = output_path / "run.log"
-plot_path = output_path / "plots"
-if not plot_path.exists():
-    plot_path.mkdir(parents=False, exist_ok=True)
+paths.output_directory.mkdir(parents=False, exist_ok=True)
 
-search_protein = config['search_protein']
-uniprot_id_check = False
+if not paths.plot_path.exists():
+    paths.plot_path.mkdir(parents=False, exist_ok=True)
 
-if re.search('[A-Z]', search_protein):
-    uniprot_id_check = True
-
-if not uniprot_id_check:
-    mrc_db_path = "Z:\\proteinchem\\CURRENT MRC DATABASE\\" + config['mrc_db']
-    mrc_db = iolo.mrc_db_to_dict(mrc_db_path)
-    POI_record = mrc_db[search_protein]
-elif uniprot_id_check:
+if not config.uniprot_id_check:
+    mrc_db = iolo.mrc_db_to_dict(paths.mrc_db_path)
+    POI_record = mrc_db[config.search_protein]
+elif config.uniprot_id_check:
     POI_record = iolodata.proteinRecord(
-        name = search_protein,
-        seq = config['seq']
+        name = config.search_protein,
+        seq = config.seq
     )
     
     
