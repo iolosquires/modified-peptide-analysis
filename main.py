@@ -45,9 +45,6 @@ logging.basicConfig(filename=paths.log_file,
                     level=logging.INFO,
                     format='%(asctime)s - %(levelname)s - %(message)s')
 
-### starting checks complete, start the analysis
-logging.info("Starting the analysis")
-
 file_contains_phospho = []
 pd_file_contains_phospho = []
 merged_data = []
@@ -61,9 +58,7 @@ for mascot_filename,pd_filename, sample_name in tqdm(zip(config.mascot_filenames
  
     mascot_savename = str(mascot_filename).replace('.mzid','')
     mascot_df = iolo.import_mascot_file(mascot_filename,input_directory)    
-    df_wanted = iolo.filter_accession_and_score(mascot_df,
-                                           config.score_cutoff,
-                                           config.search_protein)
+    df_wanted = iolo.filter_accession_and_score(mascot_df,config)
     
     if len(df_wanted) == 0:
         logging.info("No peptides found for %s", mascot_filename)
@@ -98,7 +93,7 @@ for mascot_filename,pd_filename, sample_name in tqdm(zip(config.mascot_filenames
         pd_file_contains_phospho.append(True)
         logging.info("%s phosphopeptides found for %s", len(pd_output), pd_filename)
         
-        pd_grouped, pd_peptide_site_dict, pd_peptide_is_dict, pd_conf_dict = iolo.process_pd_phospho_dataframe(pd_output,df_phospho_grouped)
+        pd_grouped, pd_peptide_site_dict, pd_peptide_is_dict, pd_conf_dict = iolo.process_pd_phospho_dataframe(pd_output,df_phospho_grouped,POI_record)
         df_phospho_grouped = iolo.add_pd_info_to_mascot(df_phospho_grouped, pd_peptide_site_dict, pd_peptide_is_dict)
 
         mascot_for_merge = df_phospho_grouped[['Mascot:score','pd_is','chargeState','experimentalMassToCharge',

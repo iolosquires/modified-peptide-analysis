@@ -43,10 +43,11 @@ class configPathInfo:
     plot_path: str = dataclasses.field(init=False)
 
     def __post_init__(self):
-        self.output_directory = self.input_directory + "/output"
+        #self.input_directory = str(self.input_directory)
+        self.output_directory = self.input_directory / "output"
         self.logo_file = iolo.get_logo_file()
-        self.log_file = self.output_directory + "/run.log"
-        self.plot_path = self.output_directory + "/plots"
+        self.log_file = self.output_directory / "run.log"
+        self.plot_path = self.output_directory / "plots"
         self.mrc_db_path = "Z:/proteinchem/CURRENT MRC DATABASE/" + self.mrc_db
     
 
@@ -57,6 +58,7 @@ def create_config_from_toml(config: dict) -> configInfo:
         mascot_filenames = config['mascot_filename'],
         pd_filenames = config['pd_filename'],
         sample_names = config['sample_name'],
+        mrc_db = config['mrc_db'],
         search_protein = config['search_protein'],
         seq = config['seq'],
         score_cutoff = config['score_cutoff'],

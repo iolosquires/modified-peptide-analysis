@@ -32,7 +32,7 @@ def load_and_process_pd_file(pd_filename,input_directory,config):
         pd_output['PhosphoRS: Best Site Probabilities'] = pd_output['ptmRS: Best Site Probabilities']
     pd_output = pd_output[pd_output['Protein Accessions'].apply(lambda x: config.search_protein in x)].copy() 
     pd_output = pd_output.dropna(subset=['PhosphoRS: Best Site Probabilities']).copy()
-    pd_output = pd_output[pd_output['Ions Score'] >= config['score_cutoff']].copy()
+    pd_output = pd_output[pd_output['Ions Score'] >= config.score_cutoff].copy()
     pd_output['phospho_rs'] = pd_output['PhosphoRS: Best Site Probabilities'].apply(mods_to_list_pd_output)
     pd_output['phospho_rs'] = pd_output['phospho_rs'].apply(remove_non_phospho_mods)
     pd_output = pd_output[pd_output['phospho_rs'] != "No Phospho"].copy()
