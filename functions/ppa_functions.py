@@ -11,12 +11,31 @@ from pathlib import Path
 import os
 import matplotlib.gridspec as gridspec
 import statistics
+import pandas as pd
+import pyteomics.mzid as mzid
 
 from functions.ppa_dataclasses import proteinRecord
 
 file_check_dictionary = {True: 'three_file_check', False: 'two_file_check'}
+
 PHOSPHO_ST_PATTERN = '3'
 PHOSPHO_Y_PATTERN = '4'
+
+
+def load_and_process_pd_file(pd_filename,input_directory,config):
+    pd_savename = str(pd_filename).replace('.txt','')
+    pd_file = mascot_file_check(pd_filename,input_directory)
+    pd_output = pd.read_csv(str(pd_file),dtype={'Protein Accessions': 'str'},sep='\t')
+    if "ptmRS: Best Site Probabilities" in pd_output.columns:
+        pd_output['PhosphoRS: Best Site Probabilities'] = pd_output['ptmRS: Best Site Probabilities']
+    pd_output = pd_output[pd_output['Protein Accessions'].apply(lambda x: config.search_protein in x)].copy() 
+    pd_output = pd_output.dropna(subset=['PhosphoRS: Best Site Probabilities']).copy()
+    pd_output = pd_output[pd_output['Ions Score'] >= config['score_cutoff']].copy()
+    pd_output['phospho_rs'] = pd_output['PhosphoRS: Best Site Probabilities'].apply(mods_to_list_pd_output)
+    pd_output['phospho_rs'] = pd_output['phospho_rs'].apply(remove_non_phospho_mods)
+    pd_output = pd_output[pd_output['phospho_rs'] != "No Phospho"].copy()
+    size_pd_df = len(pd_output)
+    return pd_output, size_pd_df,pd_savename
 
 def check_uniprot_id (config,paths):
 
@@ -626,3 +645,134 @@ def align_peptide_to_protein (peptide,protein):
 def extract_between_pipes(lst):
     return [re.search(r'\|(.*?)\|', item).group(1) for item in lst]
     
+def filter_accession_and_score(df, config):
+    return df[(df['Mascot:score'] >= float(config.score_cutoff)) & 
+          (df['accession'].apply(lambda x: search_func_dict[config.uniprot_id_check](x, config.search_protein)))]
+
+search_func_dict = {True: contains_search_term_uniprot, 
+                        False: contains_search_term}
+
+def import_mascot_file(mascot_filename,input_directory):
+        mascot_file = mascot_file_check(mascot_filename,input_directory)
+        return mzid.DataFrame(str(mascot_file))
+
+def find_phosphopeptides_in_mascot(df_wanted, config):    
+
+    df_wanted['start_end']= df_wanted.apply(lambda x: list(zip(x.start,x.end)), axis = 1)
+    if config.uniprot_id_check:
+        df_wanted['accession'] = df_wanted['accession'].apply(extract_between_pipes)
+    df_wanted['accid_start_end_dict'] = df_wanted.apply(lambda x: dict(zip(x.accession, x.start_end)), axis = 1)
+    df_wanted['poi_start_stop']= df_wanted.apply(lambda x: x.accid_start_end_dict[config.search_protein], axis = 1)
+    df_wanted['has_phospho'] = df_wanted['Modification'].apply(find_phospho_mod)
+    df_wanted_phospho = df_wanted[df_wanted['has_phospho'] == True].copy()
+
+    return df_wanted_phospho
+
+
+def process_mascot_phospho_dataframe(df_wanted_phospho):
+
+    df_wanted_phospho['phos_positions'] = df_wanted_phospho['Modification'].apply(get_phospho_positions)
+    phospho_cols_for_grouping = ['PeptideSequence','chargeState','phos_positions',
+                                'Mascot:score','Mascot:PTM site assignment confidence',
+                                'poi_start_stop','experimentalMassToCharge']
+    df_phospho_grouped = df_wanted_phospho[phospho_cols_for_grouping].copy()
+    
+    
+    df_phospho_grouped['single_acceptor']=df_phospho_grouped['PeptideSequence'].apply(find_phospho_single_acceptor_site)
+    df_phospho_grouped['double_acceptor']=df_phospho_grouped['PeptideSequence'].apply(find_phospho_double_acceptor_site)
+    df_phospho_grouped['missing_conf'] = df_phospho_grouped['Mascot:PTM site assignment confidence'].isna()
+
+    condition_single = (df_phospho_grouped['single_acceptor'] == True) & (df_phospho_grouped['missing_conf'] == True)
+    condition_double = (df_phospho_grouped['double_acceptor'] == True) & (df_phospho_grouped['missing_conf'] == True)
+    condition_missing = (df_phospho_grouped['single_acceptor'] == False) & (df_phospho_grouped['missing_conf'] == True) & (df_phospho_grouped['double_acceptor'] == False)
+    
+
+    df_phospho_grouped['Mascot:PTM site assignment confidence'] = df_phospho_grouped['Mascot:PTM site assignment confidence'].fillna(condition_single.map({True: 100}))
+    df_phospho_grouped['Mascot:PTM site assignment confidence'] = df_phospho_grouped['Mascot:PTM site assignment confidence'].fillna(condition_double.map({True: 100}))
+    df_phospho_grouped['Mascot:PTM site assignment confidence'] = df_phospho_grouped['Mascot:PTM site assignment confidence'].fillna(condition_missing.map({True: 0}))
+    
+    group_has_conf_site = df_phospho_grouped.groupby(['PeptideSequence','chargeState','phos_positions'])['Mascot:PTM site assignment confidence'].transform(lambda x: x.max() >= 80)
+    df_phospho_grouped['top_mascot_and_over80'] = (df_phospho_grouped.groupby(['PeptideSequence','chargeState','phos_positions'])['Mascot:score'].transform(lambda x: x == x.max())) & group_has_conf_site 
+    df_phospho_grouped=df_phospho_grouped.round({'Mascot:score': 0})
+    
+    phos_pep_lengths = df_phospho_grouped['PeptideSequence'].str.len().to_list()
+    phos_start_pos = [item[0] for item in df_phospho_grouped['poi_start_stop']]
+    df_phospho_grouped['phos_positions_list'] = df_phospho_grouped['phos_positions'].apply(phospho_position_string_to_list)
+    df_phospho_grouped['phos_in_protein'] = df_phospho_grouped.apply(lambda x: phos_site_in_protein(x['poi_start_stop'],x['phos_positions_list']),axis=1)
+
+    return df_phospho_grouped, phos_pep_lengths, phos_start_pos
+
+def process_pd_phospho_dataframe(pd_output,df_phospho_grouped,POI_record):
+            
+    pd_output['peptide_trim'] = pd_output['Annotated Sequence'].apply(get_peptide_from_pd_output)
+    pd_output['phosphors_conf'] = pd_output['phospho_rs'].apply(get_conf_pd)
+    pd_output['phos_pos_pep'] = pd_output['phospho_rs'].apply(get_pos_pd)
+    pd_output['peptide_cap'] = pd_output['peptide_trim'].apply(capitalise_peptides)
+    pd_output['poi_start_stop'] = pd_output['peptide_cap'].map(dict(zip(df_phospho_grouped['PeptideSequence'],
+                                                                        df_phospho_grouped['poi_start_stop'])))
+    
+    pd_output['mean_conf'] = pd_output['phosphors_conf'].apply(mean_conf_pd)
+    
+    pd_grouped = pd_output.sort_values('mean_conf',ascending=False).groupby(['peptide_trim','Charge','phos_pos_pep'],as_index=False).first()
+    pd_grouped['phos_positions_list'] = pd_grouped['phos_pos_pep'].apply(phos_pos_to_ints)
+    
+    # If nans in poi_start_stop, align peptide to protein using own function.
+    
+    if pd_grouped['poi_start_stop'].isnull().sum() > 0:
+        #split intwo two dataframes, one with nans and one without
+        pd_grouped_nan = pd_grouped[pd_grouped['poi_start_stop'].isnull()].copy()
+        pd_grouped_not_nan = pd_grouped.dropna(subset=['poi_start_stop']).copy()
+        pd_grouped_nan['poi_start_stop'] = pd_grouped_nan.apply(lambda x: align_peptide_to_protein(x['peptide_cap'],POI_record),axis=1)
+        pd_grouped = pd.concat([pd_grouped_nan,pd_grouped_not_nan],axis=0)
+
+    pd_grouped['phos_in_protein'] = pd_grouped.apply(lambda x: [item + x['poi_start_stop'][0] -2 for item in x['phos_positions_list']],axis=1)
+    pd_grouped['lc_pep'] = pd_grouped.apply(lambda x: lowercase_modified_residue(x['peptide_cap'],x['phos_positions_list']),axis=1)
+    pd_grouped['lc_pep_cs'] = pd_grouped['Charge'].astype(str) + '-' + pd_grouped['lc_pep']  
+    pd_peptide_site_dict = dict(zip(pd_grouped['lc_pep_cs'],pd_grouped['phosphors_conf']))
+    pd_peptide_is_dict = dict(zip(pd_grouped['lc_pep_cs'],pd_grouped['Ions Score']))
+    pd_grouped_explode = pd_grouped.explode(['phosphors_conf','phos_positions_list','phos_in_protein'])
+    pd_output_ge_grouped = pd_grouped_explode.sort_values('phosphors_conf',ascending=False).groupby(['phos_in_protein'],as_index=False).first()
+    pd_conf_dict = dict(zip(pd_output_ge_grouped['phos_in_protein'],pd_output_ge_grouped['phosphors_conf']))
+    return pd_grouped, pd_peptide_site_dict, pd_peptide_is_dict, pd_conf_dict
+
+
+def add_pd_info_to_mascot(df_phospho_grouped, pd_peptide_site_dict, pd_peptide_is_dict):
+
+    df_phospho_grouped['pd_peptide'] = df_phospho_grouped.apply(lambda x: lowercase_modified_residue(x['PeptideSequence'],x['phos_positions_list']),axis=1)
+    df_phospho_grouped['pd_peptide_cs'] = df_phospho_grouped['chargeState'].astype(str) + '-'  + df_phospho_grouped['pd_peptide']
+    df_phospho_grouped['pd_conf'] = df_phospho_grouped['pd_peptide_cs'].map(pd_peptide_site_dict)                                                                                                                
+    df_phospho_grouped['pd_is'] = df_phospho_grouped['pd_peptide_cs'].map(pd_peptide_is_dict)
+    return df_phospho_grouped
+
+def process_merged_dataframe(merged):
+    
+    merged = merged.round({'M/Z': 1})
+    merged['Mascot Group Conf'] = merged.groupby(['Peptide','Charge State','M/Z'])['PTM Confidence Mascot'].transform(lambda x : [x.tolist()]*len(x))
+    merged = merged.sort_values(by=['Mascot Score'], ascending=False).drop_duplicates(subset=['Peptide','Charge State','M/Z'],keep='first')
+    return merged
+        
+def create_conf_dict(df_phospho_grouped):
+
+    df_phospho_conf_dict = df_phospho_grouped.sort_values('Mascot:PTM site assignment confidence',ascending=False)
+    df_phospho_conf_dict2 = df_phospho_conf_dict.explode('phos_in_protein')
+    df_phospho_conf_dict2 = df_phospho_conf_dict2.drop_duplicates(subset='phos_in_protein')
+    conf_dict = dict(zip(df_phospho_conf_dict2['phos_in_protein'],df_phospho_conf_dict2['Mascot:PTM site assignment confidence']))
+    return conf_dict
+
+def filter_merged_dataframe_by_localisation_confidence(merged,config):
+    m = merged.apply(lambda x: filter_both_confidences(x['PTM Confidence Mascot'],x['PTM Confidence PD'],config.site_localisation_cutoff),axis=1)
+    merged_filter = merged[m].copy()
+    merged_filter['Start Stop'] = merged_filter['Start Stop'].apply(lambda x: (x[0]-1,x[1]))
+
+    return merged_filter
+
+def create_pdf_data(merged_filter):
+    df_pdf = merged_filter.map(str)
+    columns =[['Mascot Score',
+                'PD Score','Charge State',
+                'M/Z','Peptide','Conf Mascot',
+                'Conf PD','Position in Protein',
+                'Start Stop','Mascot Group Conf']]
+    rows = df_pdf.values.tolist()
+    data = columns + rows
+    return data

@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import numpy.ma as ma
+from functions.ppa_functions import capitalise_peptides 
 
 
 def create_sequences_for_plot (phos_confs,POI_record,pep_strings,chunk_size):
@@ -173,3 +174,24 @@ def create_peptide_string (protein, peptides, pep_pos):
 
     #assert len(pep2) == len(pep_string), 'Lengths do not match between protein and peptides string'
     return pep2  
+
+
+def create_phospho_peptide_plot(merged,POI_record,merge_conf_dict,paths,sample_name):
+
+    phos_peptides = list(merged['Peptide'].apply(capitalise_peptides))
+    phos_start_pos = merged['Start Stop'].to_list()
+    pep_pos_strings = [str(item) for item in phos_start_pos]
+    pep_dict = dict(zip(pep_pos_strings,phos_peptides))
+    phos_confs = [merge_conf_dict.get(i,0) for i in range(1,len(POI_record.seq)+1)]
+    list_colors = ['red']*len(merge_conf_dict)
+    mod_color_dict = dict(zip(merge_conf_dict.keys(),list_colors))
+    phos_start_pos_unique = list(set(phos_start_pos))
+    
+    master_phosphopeptide_plot(phos_start_pos_unique,
+                                        pep_dict,
+                                        POI_record,
+                                        mod_color_dict,
+                                        phos_confs,
+                                        100,
+                                        output_path=paths.plot_path,
+                                        sample_name=sample_name)

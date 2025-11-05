@@ -21,6 +21,7 @@ class configInfo:
     species: str
     uniprot_id: str
     mod_search: str
+    site_localisation_cutoff: float = dataclasses.field(default=0.0)
     uniprot_id_check: bool = dataclasses.field(default=False)
 
     def __post_init__(self):
