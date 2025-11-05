@@ -11,7 +11,7 @@
 
 2) Navigate to the directory where the scripts are located
 
-3) Run following command in anaconda powershell prompt: conda env create -f environment.yml
+3) Run following command in anaconda powershell prompt: conda env create -f environment.yaml
 
 ## How to run
 

@@ -192,8 +192,6 @@ iolo.create_excel_report(config,merged_data,file_contains_phospho,paths)
 iolo.create_pdf_report(config,merge_data_pdf,file_contains_phospho,pd_file_contains_phospho,paths)
 
 print('Creating Alphamap....')
-# Build command
 cmd = [paths.alphamap_python_path, paths.alphamap_python_script] + [args.input_directory]
-# Run the script
 result = subprocess.run(cmd,
                         text=True)
