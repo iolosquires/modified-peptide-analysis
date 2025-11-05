@@ -33,6 +33,8 @@ class configInfo:
 class configPathInfo:
     input_directory: str
     mrc_db: str
+    alphamap_python_script: str
+    alphamap_python_path: str
     mrc_db_path: str = dataclasses.field(init=False)
     output_directory: str = dataclasses.field(init=False)
     logo_file: str = dataclasses.field(init=False)
