@@ -1,10 +1,5 @@
 import re
-import pandas as pd
-import requests as r
-from fpdf import FPDF
-from pandas.api.types import is_string_dtype
 from Bio import SeqIO
-from io import StringIO
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 from matplotlib.collections import PatchCollection
@@ -17,9 +12,24 @@ import os
 import matplotlib.gridspec as gridspec
 import statistics
 
+from functions.ppa_dataclasses import proteinRecord
+
 file_check_dictionary = {True: 'three_file_check', False: 'two_file_check'}
 PHOSPHO_ST_PATTERN = '3'
 PHOSPHO_Y_PATTERN = '4'
+
+def check_uniprot_id (config,paths):
+
+    if not config.uniprot_id_check:
+        mrc_db = mrc_db_to_dict(paths.mrc_db_path)
+        POI_record = mrc_db[config.search_protein]
+        return POI_record, mrc_db
+    else:
+        POI_record = proteinRecord(
+            name = config.search_protein,
+            seq = config.seq
+        )
+        return POI_record, None
 
 def mrc_db_to_dict (path_to_mrc):
     mrc_db = SeqIO.to_dict(SeqIO.parse(path_to_mrc, 'fasta'))

@@ -1,18 +1,20 @@
-import functions.ppa_functions as iolo
-import functions.ppa_plots as ioloplot
-import functions.ppa_checks as iolotest
-import functions.ppa_dataclasses as iolodata
+
 from itertools import compress
 import pyteomics.mzid as mzid
 import tomllib
 import subprocess
-import re
 import pandas as pd
 import argparse
 from pathlib import Path
 import logging
 from fpdf import FPDF
 from tqdm import tqdm
+
+import functions.ppa_functions as iolo
+import functions.ppa_plots as ioloplot
+import functions.ppa_checks as iolotest
+import functions.ppa_dataclasses as iolodata
+
 from functions.alphamap_functions import mascot_script_to_alphamap
 
 #parse arguments
@@ -23,47 +25,25 @@ args = parser.parse_args()
 input_directory = Path(args.input_directory)
 
 with open(str(input_directory / "config.toml"), "rb") as f:
-    config = tomllib.load(f)
+    config_toml = tomllib.load(f)
 
 #create dataclasses from config
-config = iolodata.configInfo(
-    analysis_name = config['analysis_name'],
-    mascot_filenames = config['mascot_filename'],
-    pd_filenames = config['pd_filename'],
-    sample_names = config['sample_name'],
-    search_protein = config['search_protein'],
-    seq = config['seq'],
-    score_cutoff = config['score_cutoff'],
-    species = config['species'],
-    uniprot_id = config['uniprot_for_plot'],
-    mod_search = config['mod_search']
-)
-
+config = iolodata.create_config_from_toml(config_toml)
 assert len(config.mascot_filenames) == len(config.sample_names), "Number of mascot files and sample names do not match"
 
-paths = iolodata.configPathInfo(   
-    input_directory = str(input_directory),
-    mrc_db = config['mrc_db'],
-    alphamap_python_script = r"z:/proteinchem/IoloSquires/mascot-phosphopeptide/00-current/mascot_ppa_script/alphamap_plot.py",
-    alphamap_python_path = r"C:/Users/ISquires001/AppData/Local/anaconda3/envs/alphamap2/python.exe"
-
-)
-
+paths = iolodata.create_paths_from_toml(config_toml, 
+                                        input_directory,
+                                        r"z:/proteinchem/IoloSquires/mascot-phosphopeptide/00-current/mascot_ppa_script/alphamap_plot.py",
+                                        r"C:/Users/ISquires001/AppData/Local/anaconda3/envs/alphamap2/python.exe"
+                                        )
 
 paths.output_directory.mkdir(parents=False, exist_ok=True)
+paths.plot_path.mkdir(parents=False, exist_ok=True)
 
-if not paths.plot_path.exists():
-    paths.plot_path.mkdir(parents=False, exist_ok=True)
+POI_record, mrc_db = iolo.check_uniprot_id(config,
+                                      paths)
 
-if not config.uniprot_id_check:
-    mrc_db = iolo.mrc_db_to_dict(paths.mrc_db_path)
-    POI_record = mrc_db[config.search_protein]
-elif config.uniprot_id_check:
-    POI_record = iolodata.proteinRecord(
-        name = config.search_protein,
-        seq = config.seq
-    )
-    
+
 logging.basicConfig(filename=paths.log_file, 
                     level=logging.INFO,
                     format='%(asctime)s - %(levelname)s - %(message)s')

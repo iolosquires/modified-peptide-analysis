@@ -48,3 +48,30 @@ class configPathInfo:
         self.plot_path = self.output_directory + "/plots"
         self.mrc_db_path = "Z:/proteinchem/CURRENT MRC DATABASE/" + self.mrc_db
     
+
+def create_config_from_toml(config: dict) -> configInfo:
+    
+    return configInfo(
+        analysis_name = config['analysis_name'],
+        mascot_filenames = config['mascot_filename'],
+        pd_filenames = config['pd_filename'],
+        sample_names = config['sample_name'],
+        search_protein = config['search_protein'],
+        seq = config['seq'],
+        score_cutoff = config['score_cutoff'],
+        species = config['species'],
+        uniprot_id = config['uniprot_for_plot'],
+        mod_search = config['mod_search']
+    )
+
+def create_paths_from_toml(config: dict, 
+                           input_directory: str,
+                           alphamap_python_script: str,
+                           alphamap_python_path: str) -> configPathInfo:
+    
+    return configPathInfo(
+        input_directory = input_directory,
+        mrc_db = config['mrc_db'],
+        alphamap_python_script = alphamap_python_script,
+        alphamap_python_path = alphamap_python_path
+    )
