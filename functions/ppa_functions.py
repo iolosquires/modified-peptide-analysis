@@ -1,3 +1,4 @@
+from itertools import compress
 import re
 from Bio import SeqIO
 import matplotlib as mpl
@@ -13,6 +14,7 @@ import matplotlib.gridspec as gridspec
 import statistics
 import pandas as pd
 import pyteomics.mzid as mzid
+from fpdf import FPDF
 
 from functions.ppa_dataclasses import proteinRecord
 
@@ -776,3 +778,56 @@ def create_pdf_data(merged_filter):
     rows = df_pdf.values.tolist()
     data = columns + rows
     return data
+
+def create_excel_report(config,merged_data,file_contains_phospho,paths):
+
+    excel_dir = paths.output_directory / (config.analysis_name + '_phosphopeptide_report.xlsx')
+    data_for_excel_filter = list(compress(merged_data, file_contains_phospho))
+    sample_names_filter = list(compress(config.sample_names, file_contains_phospho))
+
+    with pd.ExcelWriter(excel_dir,engine="xlsxwriter")as writer:
+        for data,mascot_file in zip(data_for_excel_filter,sample_names_filter):
+            data.to_excel(writer, sheet_name=mascot_file,index=False)
+
+def create_pdf_report(config,merge_data_pdf,file_contains_phospho,pd_file_contains_phospho,paths):
+
+    pdf = FPDF()
+    col_width_dict = {True: (5,5,5,3,12,5,5,5,5,5), 
+                    False: (5,5,3,12,5,5,5,5)}
+
+    for data,mascot_file,phospho_indicator,pd_phospho in zip(merge_data_pdf,config.sample_names,file_contains_phospho,pd_file_contains_phospho):
+        
+        if phospho_indicator:
+        
+            pdf.add_page()
+            pdf.set_font("Times", style="B", size=18)
+            pdf.cell(0, 10, mascot_file, align="C")
+            pdf.ln(10) 
+            pdf.set_font("Times", size=6)
+            #add logo image
+            pdf.image(str(paths.logo_file), x=20, y=5, w=40, h=15)
+            with pdf.table(
+                borders_layout="SINGLE_TOP_LINE",
+                cell_fill_color=200,  # grey
+                cell_fill_mode="ROWS",
+                line_height=pdf.font_size * 2.5,
+                text_align="CENTER",
+                width=160,
+                col_widths=col_width_dict[pd_phospho]
+            ) as table:
+                for data_row in data:
+                    row = table.row()
+                    for datum in data_row:
+                        row.cell(datum)
+            
+        else:
+
+            pdf.add_page()
+            pdf.set_font("Times", style="B", size=18)
+            pdf.cell(0, 10, mascot_file, align="C")
+            pdf.ln(10) 
+            pdf.set_font("Times", size=7)
+            pdf.image(str(paths.logo_file), x=20, y=10, w=40, h=15)
+
+    pdf_dir = paths.output_directory / (config.analysis_name + '_phosphopeptide_report.pdf')
+    pdf.output(pdf_dir)

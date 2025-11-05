@@ -1,13 +1,10 @@
-
-from itertools import compress
-import pyteomics.mzid as mzid
 import tomllib
 import subprocess
 import pandas as pd
 import argparse
 from pathlib import Path
 import logging
-from fpdf import FPDF
+
 from tqdm import tqdm
 
 import functions.ppa_functions as iolo
@@ -145,8 +142,13 @@ for mascot_filename,pd_filename, sample_name in tqdm(zip(config.mascot_filenames
     
     #case where no pd file is given or no phosphopeptides in pd file
     elif size_pd_df == 0:
+        
         pd_file_contains_phospho.append(False)
+
         df_phospho_grouped['pd_peptide'] = df_phospho_grouped.apply(lambda x: iolo.lowercase_modified_residue(x['PeptideSequence'],x['phos_positions_list']),axis=1)
+        
+        conf_dict = iolo.create_conf_dict(df_phospho_grouped)
+        
         mascot_for_merge = df_phospho_grouped[['Mascot:score',
                                                'chargeState',
                                                'experimentalMassToCharge',
@@ -158,16 +160,11 @@ for mascot_filename,pd_filename, sample_name in tqdm(zip(config.mascot_filenames
         mascot_for_merge.columns = ['Mascot Score','Charge State',
                                     'M/Z','Peptide','PTM Confidence Mascot',
                                     'Position in Protein','Start Stop']
-        #Create phosphopeptide plot.
-        merged = mascot_for_merge
-        phos_peptides = list(merged['Peptide'].apply(iolo.capitalise_peptides))
-        phos_start_pos = merged['Start Stop'].to_list()
+        
+        phos_peptides = list(mascot_for_merge['Peptide'].apply(iolo.capitalise_peptides))
+        phos_start_pos = mascot_for_merge['Start Stop'].to_list()
         pep_pos_strings = [str(item) for item in phos_start_pos]
         pep_dict = dict(zip(pep_pos_strings,phos_peptides))
-        df_phospho_conf_dict = df_phospho_grouped.sort_values('Mascot:PTM site assignment confidence',ascending=False)
-        df_phospho_conf_dict2 = df_phospho_conf_dict.explode('phos_in_protein')
-        df_phospho_conf_dict2 = df_phospho_conf_dict2.drop_duplicates(subset='phos_in_protein')
-        conf_dict = dict(zip(df_phospho_conf_dict2['phos_in_protein'],df_phospho_conf_dict2['Mascot:PTM site assignment confidence']))
         phos_confs = [conf_dict.get(i,0) for i in range(1,len(POI_record.seq)+1)]
         list_colors = ['red']*len(conf_dict)
         mod_color_dict = dict(zip(conf_dict.keys(),list_colors))
@@ -183,93 +180,25 @@ for mascot_filename,pd_filename, sample_name in tqdm(zip(config.mascot_filenames
                                             sample_name=sample_name)
 
         mascot_for_merge['Start Stop'] = mascot_for_merge['Start Stop'].apply(lambda x: (x[0]-1,x[1]))
-        mascot_for_merge = mascot_for_merge.round({'M/Z': 1})
-        mascot_for_merge['Mascot Group Conf'] = mascot_for_merge.groupby(['Peptide','Charge State','M/Z'])['PTM Confidence Mascot'].transform(lambda x : [x.tolist()]*len(x))
-        mascot_for_merge = mascot_for_merge.sort_values(by=['Mascot Score'], ascending=False).drop_duplicates(subset=['Peptide','Charge State','M/Z'],keep='first')
+        mascot_for_merge = iolo.process_merged_dataframe(mascot_for_merge)
         
         iolotest.check_position_correct_aa(mascot_for_merge['Position in Protein'],mascot_for_merge['Peptide'],POI_record)
         iolotest.check_peptides_correct_position(mascot_for_merge['Peptide'],mascot_for_merge['Start Stop'],POI_record)
         
         merged_data.append(mascot_for_merge)
-        df_pdf = mascot_for_merge.map(str)
-        columns =[['Mascot Score','Charge State','M/Z','Peptide',
-                   'PTM Confidence Mascot','Position in Protein','Start Stop',
-                   'Mascot Group Conf']]
-        rows = df_pdf.values.tolist()
-        data = columns + rows
+        data = iolo.create_pdf_data(mascot_for_merge)
         merge_data_pdf.append(data)
         mascot_script_to_alphamap(mascot_for_merge,
                                  config.uniprot_id,
                                  paths.output_directory / (mascot_savename + '_for_alphamap.tsv'))
         
 
-logging.info("Creating pdf report. Have %s dataframes to add to pdf", len(merged_data))
-pdf = FPDF()
-excel_dir = paths.output_directory / (config['analysis_name'] + '_phosphopeptide_report.xlsx')
-
-# Create pdf report and excel
-
-data_for_excel_filter = list(compress(merged_data, file_contains_phospho))
-sample_names_filter = list(compress(config.sample_names, file_contains_phospho))
-
-with pd.ExcelWriter(excel_dir,engine="xlsxwriter")as writer:
-    for data,mascot_file in zip(data_for_excel_filter,sample_names_filter):
-        logging.info("Adding data to Excel for %s which has phosphopeptides", mascot_file)
-        data.to_excel(writer, sheet_name=mascot_file,index=False)
-
-col_width_dict = {True: (5,5,5,3,12,5,5,5,5,5), False: (5,5,3,12,5,5,5,5)}
-
-for data,mascot_file,phospho_indicator,pd_phospho in zip(merge_data_pdf,config.sample_names,file_contains_phospho,pd_file_contains_phospho):
-    
-    
-    
-
-
-    if phospho_indicator:
-        logging.info("Adding data to pdf for %s which has phosphopeptides", mascot_file)
-        pdf.add_page()
-        pdf.set_font("Times", style="B", size=18)
-        pdf.cell(0, 10, mascot_file, align="C")
-        pdf.ln(10) 
-        pdf.set_font("Times", size=6)
-        #add logo image
-        pdf.image(str(paths.logo_file), x=20, y=5, w=40, h=15)
-        with pdf.table(
-            borders_layout="SINGLE_TOP_LINE",
-            cell_fill_color=200,  # grey
-            cell_fill_mode="ROWS",
-            line_height=pdf.font_size * 2.5,
-            text_align="CENTER",
-            width=160,
-            col_widths=col_width_dict[pd_phospho]
-        ) as table:
-            for data_row in data:
-                row = table.row()
-                for datum in data_row:
-                    row.cell(datum)
-        
-    else:
-
-        logging.info("Adding data to pdf for %s which does not have phosphopeptides", mascot_file)
-        pdf.add_page()
-        pdf.set_font("Times", style="B", size=18)
-        pdf.cell(0, 10, mascot_file, align="C")
-        pdf.ln(10) 
-        pdf.set_font("Times", size=7)
-        pdf.image(str(paths.logo_file), x=20, y=10, w=40, h=15)
-
-pdf_dir = paths.output_directory / (config.analysis_name + '_phosphopeptide_report.pdf')
-pdf.output(pdf_dir)
-logging.info("Analysis finished")
+iolo.create_excel_report(config,merged_data,file_contains_phospho,paths)
+iolo.create_pdf_report(config,merge_data_pdf,file_contains_phospho,pd_file_contains_phospho,paths)
 
 print('Creating Alphamap....')
-#call alphamap script
-
 # Build command
 cmd = [paths.alphamap_python_path, paths.alphamap_python_script] + [args.input_directory]
-
 # Run the script
 result = subprocess.run(cmd,
                         text=True)
-
-print('Analysis finished')
