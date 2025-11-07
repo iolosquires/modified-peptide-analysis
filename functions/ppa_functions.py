@@ -506,7 +506,7 @@ def find_phospho_mod(mod_dict_list):
                 break
             else:
                 found_phospho = False
-    except:
+    except:  # noqa: E722
         found_phospho = False
 
     return found_phospho
@@ -558,7 +558,7 @@ def find_ubiquitin_mod(mod_dict_list):
                 break
             else:
                 found_phospho = False
-    except:
+    except:  # noqa: E722
         found_phospho = False
 
     return found_phospho
@@ -686,7 +686,7 @@ def filter_both_confidences(mascot, phosphors, cutoff):
 
     if mascot >= cutoff:
         mascot_check = True
-    if type(phosphors) == list:
+    if isinstance(phosphors, list):
         if any(item >= cutoff for item in phosphors):
             phosphors_check = True
     if mascot_check | phosphors_check:
@@ -749,7 +749,7 @@ def find_phosphopeptides_in_mascot(df_wanted, config):
         lambda x: x.accid_start_end_dict[config.search_protein], axis=1
     )
     df_wanted["has_phospho"] = df_wanted["Modification"].apply(find_phospho_mod)
-    df_wanted_phospho = df_wanted[df_wanted["has_phospho"] == True].copy()
+    df_wanted_phospho = df_wanted[df_wanted["has_phospho"]].copy()
 
     return df_wanted_phospho
 
@@ -779,16 +779,16 @@ def process_mascot_phospho_dataframe(df_wanted_phospho):
         "Mascot:PTM site assignment confidence"
     ].isna()
 
-    condition_single = (df_phospho_grouped["single_acceptor"] == True) & (
-        df_phospho_grouped["missing_conf"] == True
+    condition_single = (df_phospho_grouped["single_acceptor"]) & (
+        df_phospho_grouped["missing_conf"]
     )
-    condition_double = (df_phospho_grouped["double_acceptor"] == True) & (
-        df_phospho_grouped["missing_conf"] == True
+    condition_double = (df_phospho_grouped["double_acceptor"]) & (
+        df_phospho_grouped["missing_conf"]
     )
     condition_missing = (
-        (df_phospho_grouped["single_acceptor"] == False)
-        & (df_phospho_grouped["missing_conf"] == True)
-        & (df_phospho_grouped["double_acceptor"] == False)
+        (not df_phospho_grouped["single_acceptor"])
+        & (df_phospho_grouped["missing_conf"])
+        & (not df_phospho_grouped["double_acceptor"])
     )
 
     df_phospho_grouped["Mascot:PTM site assignment confidence"] = df_phospho_grouped[

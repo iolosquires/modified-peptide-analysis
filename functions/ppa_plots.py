@@ -12,8 +12,8 @@ def create_sequences_for_plot(phos_confs, POI_record, pep_strings, chunk_size):
         + pep_strings
     )
 
-    assert type(phos_confs) == list, "phos_confs must be a list"
-    assert type(pep_strings) == list, "pep_strings must be a list"
+    assert isinstance(phos_confs,list), "phos_confs must be a list"
+    assert isinstance(pep_strings,list), "pep_strings must be a list"
 
     chopped_sequences = []
     for seq in sequences_for_chop:
