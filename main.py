@@ -1,11 +1,7 @@
 import tomllib
-import subprocess
 import pandas as pd
 import argparse
 from pathlib import Path
-import logging
-
-from tqdm import tqdm
 
 import functions.ppa_functions as iolo
 import functions.ppa_plots as ioloplot
@@ -25,11 +21,11 @@ input_directory = Path(args.input_directory)
 with open(str(input_directory / "config.toml"), "rb") as f:
     config_toml = tomllib.load(f)
 
+iolo.save_everything_to_output(input_directory, "output/code")
+ed = iolo.open_read_experimental_design(input_directory)
+
 # create dataclasses from config
-config = iolodata.create_config_from_toml(config_toml)
-assert len(config.mascot_filenames) == len(config.sample_names), (
-    "Number of mascot files and sample names do not match"
-)
+config = iolodata.create_config_from_toml(config_toml,ed)
 
 paths = iolodata.create_paths_from_toml(
     config_toml,
@@ -39,16 +35,8 @@ paths = iolodata.create_paths_from_toml(
 )
 
 paths.output_directory.mkdir(parents=False, exist_ok=True)
-paths.plot_path.mkdir(parents=False, exist_ok=True)
-
-POI_record, mrc_db = iolo.check_uniprot_id(config, paths)
-
-
-logging.basicConfig(
-    filename=paths.log_file,
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-)
+if config.create_old_plot:
+    paths.plot_path.mkdir(parents=False, exist_ok=True)
 
 file_contains_phospho = []
 pd_file_contains_phospho = []
@@ -56,28 +44,33 @@ merged_data = []
 merge_data_pdf = []
 
 ###loop over masccot files (mzid files) and pd output (txt files)
-for mascot_filename, pd_filename, sample_name in tqdm(
-    zip(config.mascot_filenames, config.pd_filenames, config.sample_names),
-    total=len(config.mascot_filenames),
-):
+for mascot_filename, pd_filename, sample_name, search_record in zip(config.mascot_filenames, 
+                                                                    config.pd_filenames, 
+                                                                    config.sample_names, 
+                                                                    config.search_protein_list):
+    
     mascot_savename = str(mascot_filename).replace(".mzid", "")
+    POI_record, mrc_db = iolo.check_uniprot_id(config, paths,search_record)
+    
+    print(f"Processing sample: {sample_name}")
+
     mascot_df = iolo.import_mascot_file(mascot_filename, input_directory)
-    df_wanted = iolo.filter_accession_and_score(mascot_df, config)
+    df_wanted = iolo.filter_accession_and_score(mascot_df, config, search_record)
 
     if len(df_wanted) == 0:
-        logging.info("No peptides found for %s", mascot_filename)
+        
         file_contains_phospho.append(False)
         pd_file_contains_phospho.append(False)
         merged_data.append("No peptides found")
         merge_data_pdf.append("No peptides found")
         continue
 
-    df_wanted_phospho = iolo.find_phosphopeptides_in_mascot(df_wanted, config)
+    df_wanted_phospho = iolo.find_phosphopeptides_in_mascot(df_wanted, config, search_record)
 
-    logging.info("%s phospho peptides", len(df_wanted_phospho))
+    
 
     if len(df_wanted_phospho) == 0:
-        logging.info("No phosphopeptides found for %s", mascot_filename)
+        
         file_contains_phospho.append(False)
         pd_file_contains_phospho.append(False)
         merged_data.append("No phosphopeptides found")
@@ -93,13 +86,11 @@ for mascot_filename, pd_filename, sample_name in tqdm(
         size_pd_df = 0
     else:
         pd_output, size_pd_df, pd_savename = iolo.load_and_process_pd_file(
-            pd_filename, input_directory, config
+            pd_filename, input_directory, config, search_record
         )
 
     if size_pd_df > 0:
         pd_file_contains_phospho.append(True)
-        logging.info("%s phosphopeptides found for %s", len(pd_output), pd_filename)
-
         pd_grouped, pd_peptide_site_dict, pd_peptide_is_dict, pd_conf_dict = (
             iolo.process_pd_phospho_dataframe(pd_output, df_phospho_grouped, POI_record)
         )
@@ -162,9 +153,10 @@ for mascot_filename, pd_filename, sample_name in tqdm(
         merge_conf_dict = iolo.combine_pd_mascot_confs(pd_conf_dict, conf_dict)
 
         # Create phosphopeptide plot
-        ioloplot.create_phospho_peptide_plot(
-            merged, POI_record, merge_conf_dict, paths, sample_name
-        )
+        if config.create_old_plot:
+            ioloplot.create_phospho_peptide_plot(
+                merged, POI_record, merge_conf_dict, paths, sample_name
+            )
 
         merged_filter = iolo.filter_merged_dataframe_by_localisation_confidence(
             merged, config
@@ -222,28 +214,28 @@ for mascot_filename, pd_filename, sample_name in tqdm(
             "Position in Protein",
             "Start Stop",
         ]
+        if config.create_old_plot:
+            phos_peptides = list(
+                mascot_for_merge["Peptide"].apply(iolo.capitalise_peptides)
+            )
+            phos_start_pos = mascot_for_merge["Start Stop"].to_list()
+            pep_pos_strings = [str(item) for item in phos_start_pos]
+            pep_dict = dict(zip(pep_pos_strings, phos_peptides))
+            phos_confs = [conf_dict.get(i, 0) for i in range(1, len(POI_record.seq) + 1)]
+            list_colors = ["red"] * len(conf_dict)
+            mod_color_dict = dict(zip(conf_dict.keys(), list_colors))
+            phos_start_pos_unique = list(set(phos_start_pos))
 
-        phos_peptides = list(
-            mascot_for_merge["Peptide"].apply(iolo.capitalise_peptides)
-        )
-        phos_start_pos = mascot_for_merge["Start Stop"].to_list()
-        pep_pos_strings = [str(item) for item in phos_start_pos]
-        pep_dict = dict(zip(pep_pos_strings, phos_peptides))
-        phos_confs = [conf_dict.get(i, 0) for i in range(1, len(POI_record.seq) + 1)]
-        list_colors = ["red"] * len(conf_dict)
-        mod_color_dict = dict(zip(conf_dict.keys(), list_colors))
-        phos_start_pos_unique = list(set(phos_start_pos))
-
-        ioloplot.master_phosphopeptide_plot(
-            phos_start_pos_unique,
-            pep_dict,
-            POI_record,
-            mod_color_dict,
-            phos_confs,
-            100,
-            output_path=paths.plot_path,
-            sample_name=sample_name,
-        )
+            ioloplot.master_phosphopeptide_plot(
+                phos_start_pos_unique,
+                pep_dict,
+                POI_record,
+                mod_color_dict,
+                phos_confs,
+                100,
+                output_path=paths.plot_path,
+                sample_name=sample_name,
+            )
 
         mascot_for_merge["Start Stop"] = mascot_for_merge["Start Stop"].apply(
             lambda x: (x[0] - 1, x[1])
@@ -268,14 +260,8 @@ for mascot_filename, pd_filename, sample_name in tqdm(
             paths.output_directory / (mascot_savename + "_for_alphamap.tsv"),
         )
 
-
 iolo.create_excel_report(config, merged_data, file_contains_phospho, paths)
 iolo.create_pdf_report(
     config, merge_data_pdf, file_contains_phospho, pd_file_contains_phospho, paths
 )
 
-print("Creating Alphamap....")
-cmd = [paths.alphamap_python_path, paths.alphamap_python_script] + [
-    args.input_directory
-]
-result = subprocess.run(cmd, text=True)

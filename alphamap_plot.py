@@ -8,7 +8,7 @@ from alphamap.sequenceplot import plot_peptide_traces, uniprot_color_dict
 from alphamap.uniprot_integration import uniprot_feature_dict
 from alphamap.organisms_data import import_uniprot_annotation
 
-
+from functions import alphamap_functions as alphafunc
 parser = argparse.ArgumentParser(
     prog="mascot-ppa", description="Mascot phosphopeptide analysis (PPA) tool"
 )
@@ -20,17 +20,18 @@ with open(str(input_directory / "config.toml"), "rb") as f:
     config = tomllib.load(f)
 
 analysis_name = config["analysis_name"]
-
 species = config["species"]
 uniprot_id = config["uniprot_for_plot"]  # Nek1 isoform 3
 mod_search = config["mod_search"]
 
+ed = alphafunc.open_read_experimental_design(input_directory)
+
 output_dir = f"{input_directory}\\output\\" 
 output_savename = f"{input_directory}\\output\\alphamap_{uniprot_id}.html"
 
-for_alphamap_path = [output_dir + item.replace(".mzid","") + "_for_alphamap.tsv" for item in config["mascot_filename"]]
+for_alphamap_path = [output_dir + item.replace(".mzid","") + "_for_alphamap.tsv" for item in ed["mascot_filename"]]
 
-for_alphamap_samplename = config['sample_name']
+for_alphamap_samplename = ed['sample_name']
 
 human_uniprot = import_uniprot_annotation(species)
 human_fasta = import_fasta(species)

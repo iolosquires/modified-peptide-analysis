@@ -16,18 +16,20 @@ class configInfo:
     pd_filenames: list
     sample_names: list
     mrc_db: str
-    search_protein: str
+    search_protein_list: list
     seq: str
     score_cutoff: float
     species: str
     uniprot_id: str
     mod_search: str
+    uniprot_id_check: bool
     site_localisation_cutoff: float = dataclasses.field(default=0.0)
-    uniprot_id_check: bool = dataclasses.field(default=False)
+    create_old_plot: bool = dataclasses.field(default=False)
 
     def __post_init__(self):
-        if re.search("[A-Z]", self.search_protein):
-            self.uniprot_id_check = True
+        # turn search_protein_list into list of strings
+        self.search_protein_list = [str(item) for item in self.search_protein_list]
+     
 
 
 @dataclasses.dataclass
@@ -51,19 +53,24 @@ class configPathInfo:
         self.mrc_db_path = "Z:/proteinchem/CURRENT MRC DATABASE/" + self.mrc_db
 
 
-def create_config_from_toml(config: dict) -> configInfo:
+def create_config_from_toml(config: dict, ExperimentalDesign) -> configInfo:
     return configInfo(
+        
+        mascot_filenames=ExperimentalDesign["mascot_filename"],
+        pd_filenames=ExperimentalDesign["pd_filename"],
+        sample_names=ExperimentalDesign["sample_name"],
+        search_protein_list=ExperimentalDesign["search_protein"],
+
         analysis_name=config["analysis_name"],
-        mascot_filenames=config["mascot_filename"],
-        pd_filenames=config["pd_filename"],
-        sample_names=config["sample_name"],
         mrc_db=config["mrc_db"],
-        search_protein=config["search_protein"],
         seq=config["seq"],
         score_cutoff=config["score_cutoff"],
         species=config["species"],
         uniprot_id=config["uniprot_for_plot"],
         mod_search=config["mod_search"],
+        create_old_plot = config["create_old_plot"],
+        uniprot_id_check=config["uniprot_id_check"]
+
     )
 
 

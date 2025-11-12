@@ -15,6 +15,7 @@ import statistics
 import pandas as pd
 import pyteomics.mzid as mzid
 from fpdf import FPDF
+import shutil
 
 from functions.ppa_dataclasses import proteinRecord
 
@@ -24,7 +25,44 @@ PHOSPHO_ST_PATTERN = "3"
 PHOSPHO_Y_PATTERN = "4"
 
 
-def load_and_process_pd_file(pd_filename, input_directory, config):
+
+def save_everything_to_output(source_dir, save_dir):
+    """
+    Copy everything (files and folders) from source_dir to an 'output' subdirectory.
+
+    Parameters
+    ----------
+    source_dir : str
+        Path to the directory whose contents should be copied.
+    """
+    # Ensure the source directory exists
+    if not os.path.isdir(source_dir):
+        raise FileNotFoundError(f"Source directory not found: {source_dir}")
+
+    # Create the output directory path
+    output_dir = os.path.join(source_dir, save_dir)
+    os.makedirs(output_dir, exist_ok=True)
+
+    # Copy all contents
+    for item in os.listdir(source_dir):
+        src_path = os.path.join(source_dir, item)
+        dst_path = os.path.join(output_dir, item)
+
+        # Skip copying the output folder into itself
+        if src_path == output_dir:
+            continue
+
+        # Copy files or directories
+        if os.path.isdir(src_path):
+            shutil.copytree(src_path, dst_path, dirs_exist_ok=True)
+        else:
+            shutil.copy2(src_path, dst_path)
+
+    print(f"✅ All contents from '{source_dir}' copied to '{output_dir}'")
+
+
+
+def load_and_process_pd_file(pd_filename, input_directory, config, search_record):
     pd_savename = str(pd_filename).replace(".txt", "")
     pd_file = mascot_file_check(pd_filename, input_directory)
     pd_output = pd.read_csv(str(pd_file), dtype={"Protein Accessions": "str"}, sep="\t")
@@ -33,7 +71,7 @@ def load_and_process_pd_file(pd_filename, input_directory, config):
             "ptmRS: Best Site Probabilities"
         ]
     pd_output = pd_output[
-        pd_output["Protein Accessions"].apply(lambda x: config.search_protein in x)
+        pd_output["Protein Accessions"].apply(lambda x: search_record in x)
     ].copy()
     pd_output = pd_output.dropna(subset=["PhosphoRS: Best Site Probabilities"]).copy()
     pd_output = pd_output[pd_output["Ions Score"] >= config.score_cutoff].copy()
@@ -46,13 +84,13 @@ def load_and_process_pd_file(pd_filename, input_directory, config):
     return pd_output, size_pd_df, pd_savename
 
 
-def check_uniprot_id(config, paths):
+def check_uniprot_id(config, paths, search_record):
     if not config.uniprot_id_check:
         mrc_db = mrc_db_to_dict(paths.mrc_db_path)
-        POI_record = mrc_db[config.search_protein]
+        POI_record = mrc_db[str(search_record)]
         return POI_record, mrc_db
     else:
-        POI_record = proteinRecord(name=config.search_protein, seq=config.seq)
+        POI_record = proteinRecord(name=search_record, seq=config.seq)
         return POI_record, None
 
 
@@ -715,13 +753,13 @@ def extract_between_pipes(lst):
     return [re.search(r"\|(.*?)\|", item).group(1) for item in lst]
 
 
-def filter_accession_and_score(df, config):
+def filter_accession_and_score(df, config, search_record):
     return df[
         (df["Mascot:score"] >= float(config.score_cutoff))
         & (
             df["accession"].apply(
                 lambda x: search_func_dict[config.uniprot_id_check](
-                    x, config.search_protein
+                    x, search_record
                 )
             )
         )
@@ -736,7 +774,7 @@ def import_mascot_file(mascot_filename, input_directory):
     return mzid.DataFrame(str(mascot_file))
 
 
-def find_phosphopeptides_in_mascot(df_wanted, config):
+def find_phosphopeptides_in_mascot(df_wanted, config,search_record):
     df_wanted["start_end"] = df_wanted.apply(
         lambda x: list(zip(x.start, x.end)), axis=1
     )
@@ -746,7 +784,7 @@ def find_phosphopeptides_in_mascot(df_wanted, config):
         lambda x: dict(zip(x.accession, x.start_end)), axis=1
     )
     df_wanted["poi_start_stop"] = df_wanted.apply(
-        lambda x: x.accid_start_end_dict[config.search_protein], axis=1
+        lambda x: x.accid_start_end_dict[search_record], axis=1
     )
     df_wanted["has_phospho"] = df_wanted["Modification"].apply(find_phospho_mod)
     df_wanted_phospho = df_wanted[df_wanted["has_phospho"]].copy()
@@ -1046,3 +1084,12 @@ def create_pdf_report(
         config.analysis_name + "_phosphopeptide_report.pdf"
     )
     pdf.output(pdf_dir)
+
+def open_read_experimental_design (input_directory):
+    
+    experimental_design_file = Path(input_directory) / "ExperimentalDesign.txt"
+    assert experimental_design_file.exists(), "experimental design file does not exist"
+
+    ed = pd.read_csv(experimental_design_file, sep="\t")
+    return ed
+

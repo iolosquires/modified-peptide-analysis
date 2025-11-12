@@ -1,3 +1,6 @@
+from pathlib import Path
+import pandas as pd
+
 def create_assigned_mods(test):
     mod_dict = {'S': '(79.9663)',
                 'T': '(79.9663)',
@@ -17,6 +20,15 @@ def create_assigned_mods(test):
         assigned_mods.append(mod_string)
     
     return ",".join(assigned_mods)
+
+def open_read_experimental_design (input_directory):
+    
+    experimental_design_file = Path(input_directory) / "ExperimentalDesign.txt"
+    assert experimental_design_file.exists(), "experimental design file does not exist"
+
+    ed = pd.read_csv(experimental_design_file, sep="\t")
+    return ed
+
 
 def mascot_script_to_alphamap(df, protein_id, output_dir):
 
