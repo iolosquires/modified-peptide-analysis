@@ -786,9 +786,9 @@ def process_mascot_phospho_dataframe(df_wanted_phospho):
         df_phospho_grouped["missing_conf"]
     )
     condition_missing = (
-        (not df_phospho_grouped["single_acceptor"])
+        (~df_phospho_grouped["single_acceptor"])
         & (df_phospho_grouped["missing_conf"])
-        & (not df_phospho_grouped["double_acceptor"])
+        & (~df_phospho_grouped["double_acceptor"])
     )
 
     df_phospho_grouped["Mascot:PTM site assignment confidence"] = df_phospho_grouped[
