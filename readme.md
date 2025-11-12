@@ -31,7 +31,7 @@ Taxonomy ID, Protein sequence.) and Optional Peptide Match Information (Show dup
 
 5) Move PSMs.txt file to the same folder as mzIdentML files.
 
-6) Fill in config.toml file (example are here: Z:\proteinchem\IoloSquires\mascot-phosphopeptide\00-current\mascot_ppa_input)
+6) Fill in config.toml file (example are here: Z:\proteinchem\IoloSquires\00-Projects\ArpanMehta\20251022_AMehta_AM_121006\nek1)
 
 7) Fill in ExperimentDesign.txt file with mascot filename, pd filename, sample name and mrc db accession ID for the search protein.
 
@@ -49,3 +49,7 @@ and run main.py. Run main.py by writing in the command line "python main.py [dir
 conda activate -n alphamap2
 ```
 and run alphamap_plot in the same way as main.py.
+
+## Acknowledgments
+
+* [alphamap](https://github.com/MannLabs/alphamap/tree/main)
