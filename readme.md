@@ -2,15 +2,19 @@
 
 ## Downloads
 
-[Anaconda](https://www.anaconda.com/download)
+* Anaconda (search on AppsAnywhere)
 
 ## Installation
 
 * Open Anaconda Powershell Prompt
 
-* Navigate to the directory where the scripts are located
+* Navigate to the directory where the scripts are located:
 
-* Run following commands in anaconda powershell prompt: 
+``` bash
+cd directory\where\script\is
+```
+
+* Run following commands in anaconda powershell prompt:
 
 ``` bash
 conda env create -f environment.yml 
@@ -48,6 +52,7 @@ and run main.py. Run main.py by writing in the command line "python main.py [dir
 ``` bash
 conda activate -n alphamap2
 ```
+
 and run alphamap_plot in the same way as main.py.
 
 ## Acknowledgments
