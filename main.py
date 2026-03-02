@@ -21,7 +21,7 @@ input_directory = Path(args.input_directory)
 with open(str(input_directory / "config.toml"), "rb") as f:
     config_toml = tomllib.load(f)
 
-iolo.save_everything_to_output(input_directory, "output/code")
+#iolo.save_everything_to_output(input_directory, "output/code")
 ed = iolo.open_read_experimental_design(input_directory)
 
 # create dataclasses from config
@@ -37,6 +37,8 @@ paths = iolodata.create_paths_from_toml(
 paths.output_directory.mkdir(parents=False, exist_ok=True)
 if config.create_old_plot:
     paths.plot_path.mkdir(parents=False, exist_ok=True)
+
+iolo.create_mascot_links_file(ed, paths)
 
 file_contains_phospho = []
 pd_file_contains_phospho = []
@@ -155,27 +157,34 @@ for mascot_filename, pd_filename, sample_name, search_record in zip(config.masco
         # Create phosphopeptide plot
         if config.create_old_plot:
             ioloplot.create_phospho_peptide_plot(
+
                 merged, POI_record, merge_conf_dict, paths, sample_name
             )
 
         merged_filter = iolo.filter_merged_dataframe_by_localisation_confidence(
             merged, config
         )
+        
         # check start stop positions are correct
         iolotest.check_position_correct_aa(
             merged_filter["Position in Protein"], merged_filter["Peptide"], POI_record
         )
+        
         iolotest.check_peptides_correct_position(
             merged_filter["Peptide"], merged_filter["Start Stop"], POI_record
         )
 
         # Store things from loop
+
         merged_data.append(merged_filter)
+        #check has 8 columns for pdf data
+        assert len(merged_filter.columns) == 10, "mascot and pd should have 10 columns {merged_filter.columns}"
+
         data = iolo.create_pdf_data(merged_filter)
         merge_data_pdf.append(data)
 
         mascot_script_to_alphamap(
-            merged,
+            merged.copy(),
             config.uniprot_id,
             paths.output_directory / (mascot_savename + "_for_alphamap.tsv"),
         )
@@ -214,6 +223,7 @@ for mascot_filename, pd_filename, sample_name, search_record in zip(config.masco
             "Position in Protein",
             "Start Stop",
         ]
+
         if config.create_old_plot:
             phos_peptides = list(
                 mascot_for_merge["Peptide"].apply(iolo.capitalise_peptides)
@@ -248,20 +258,37 @@ for mascot_filename, pd_filename, sample_name, search_record in zip(config.masco
             POI_record,
         )
         iolotest.check_peptides_correct_position(
-            mascot_for_merge["Peptide"], mascot_for_merge["Start Stop"], POI_record
+            mascot_for_merge["Peptide"], 
+            mascot_for_merge["Start Stop"], 
+            POI_record
         )
-
+       
         merged_data.append(mascot_for_merge)
+
+        #check has 8 columns for pdf data
+        assert len(mascot_for_merge.columns) == 8, "mascot for merge should have 8 columns: {mascot_for_merge.columns}"
+
         data = iolo.create_pdf_data(mascot_for_merge)
         merge_data_pdf.append(data)
+
         mascot_script_to_alphamap(
-            mascot_for_merge,
+            mascot_for_merge.copy(),
             config.uniprot_id,
             paths.output_directory / (mascot_savename + "_for_alphamap.tsv"),
         )
 
-iolo.create_excel_report(config, merged_data, file_contains_phospho, paths)
+iolo.create_excel_report(
+    config, 
+    merged_data, 
+    file_contains_phospho, 
+    paths
+    )
+
 iolo.create_pdf_report(
-    config, merge_data_pdf, file_contains_phospho, pd_file_contains_phospho, paths
+    config, 
+    merge_data_pdf, 
+    file_contains_phospho, 
+    pd_file_contains_phospho, 
+    paths
 )
 

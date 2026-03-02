@@ -10,7 +10,7 @@ def check_position_correct_aa(position_column, peptide_column, protein_seq):
             residue = protein_seq.seq[output_pos]
             peptide_residue = position[0].upper()
             assert residue == peptide_residue, (
-                f"{residue} in protein is not equal to {peptide_residue, position[1]} in peptide {peptide} Is the mrc db uptodate?"
+                f"{residue} in protein is not equal to {peptide_residue, position[1]} in peptide {peptide} Is the mrc db uptodate? protein_seq: {protein_seq.seq} position: {output_pos}"
             )
 
 

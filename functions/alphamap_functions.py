@@ -5,7 +5,8 @@ def create_assigned_mods(test):
     mod_dict = {'S': '(79.9663)',
                 'T': '(79.9663)',
                 'Y': '(79.9663)',
-                'K': '(114.0429)'
+                'K': '(114.0429)',
+                'C': '(57.0215)'
                 }
     
     test_split = list(test)
@@ -31,6 +32,8 @@ def open_read_experimental_design (input_directory):
 
 
 def mascot_script_to_alphamap(df, protein_id, output_dir):
+
+    df = df.copy()
 
 
     df['Protein ID'] = protein_id

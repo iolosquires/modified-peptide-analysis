@@ -16,6 +16,7 @@ import pandas as pd
 import pyteomics.mzid as mzid
 from fpdf import FPDF
 import shutil
+import requests
 
 from functions.ppa_dataclasses import proteinRecord
 
@@ -90,7 +91,21 @@ def check_uniprot_id(config, paths, search_record):
         POI_record = mrc_db[str(search_record)]
         return POI_record, mrc_db
     else:
-        POI_record = proteinRecord(name=search_record, seq=config.seq)
+        # Retrieve sequence from UniProt
+        uniprot_url = f"https://rest.uniprot.org/uniprotkb/{search_record}.fasta"
+        try:
+            response = requests.get(uniprot_url)
+            response.raise_for_status() # Check for HTTP errors
+            
+            # The first line is the header, the rest is the sequence
+            lines = response.text.splitlines()
+            sequence = "".join(lines[1:])
+            
+            POI_record = proteinRecord(name=search_record, seq=sequence)
+        except requests.exceptions.RequestException as e:
+            print(f"Error fetching UniProt ID {search_record}: {e}")
+            # Fallback or raise error depending on your needs
+            POI_record = None
         return POI_record, None
 
 
@@ -775,6 +790,9 @@ def import_mascot_file(mascot_filename, input_directory):
 
 
 def find_phosphopeptides_in_mascot(df_wanted, config,search_record):
+
+    df_wanted = df_wanted.copy()
+
     df_wanted["start_end"] = df_wanted.apply(
         lambda x: list(zip(x.start, x.end)), axis=1
     )
@@ -1003,7 +1021,15 @@ def filter_merged_dataframe_by_localisation_confidence(merged, config):
 
 
 def create_pdf_data(merged_filter):
-    df_pdf = merged_filter.map(str)
+
+    df_pdf = merged_filter.copy()
+
+    if len(df_pdf.columns) == 8:
+        # Insert "PD Score" at index 1 (after Mascot Score)
+        df_pdf.insert(1, "PD Score", "NA")
+        df_pdf.insert(6, "Conf PD", "NA")
+
+    df_pdf = df_pdf.map(str)
     columns = [
         [
             "Mascot Score",
@@ -1039,11 +1065,7 @@ def create_pdf_report(
     config, merge_data_pdf, file_contains_phospho, pd_file_contains_phospho, paths
 ):
     pdf = FPDF()
-    col_width_dict = {
-        True: (5, 5, 5, 3, 12, 5, 5, 5, 5, 5),
-        False: (5, 5, 3, 12, 5, 5, 5, 5),
-    }
-
+    
     for data, mascot_file, phospho_indicator, pd_phospho in zip(
         merge_data_pdf,
         config.sample_names,
@@ -1058,6 +1080,19 @@ def create_pdf_report(
             pdf.set_font("Times", size=6)
             # add logo image
             pdf.image(str(paths.logo_file), x=20, y=5, w=40, h=15)
+
+            #expected_widths = col_width_dict[pd_phospho]
+        
+            #actual_col_count = len(data[0]) # Check first row of data
+            #if actual_col_count != len(expected_widths):
+             #   print(f"\n[DEBUG ERROR] Column Mismatch for {mascot_file}!")
+             #   print(f"PD Phospho state: {pd_phospho}")
+             #   print(f"PDF logic expects: {len(expected_widths)} columns")
+             #   print(f"Data actually has: {actual_col_count} columns")
+              #  print(f"First row data: {data[0]}")
+                # Optional: raise an error here to stop the script early
+                # raise ValueError(f"Column mismatch: Data has {actual_col_count}, expected {len(expected_widths)}")
+
             with pdf.table(
                 borders_layout="SINGLE_TOP_LINE",
                 cell_fill_color=200,  # grey
@@ -1065,7 +1100,7 @@ def create_pdf_report(
                 line_height=pdf.font_size * 2.5,
                 text_align="CENTER",
                 width=160,
-                col_widths=col_width_dict[pd_phospho],
+                col_widths=(5, 5, 5, 3, 12, 5, 5, 5, 5, 5),
             ) as table:
                 for data_row in data:
                     row = table.row()
@@ -1093,3 +1128,17 @@ def open_read_experimental_design (input_directory):
     ed = pd.read_csv(experimental_design_file, sep="\t")
     return ed
 
+def create_mascot_links(ed, paths):
+    
+    if ed[["mascot_filename", "pd_filename", "search_date"]].isnull().values.any():
+        raise ValueError("Experimental design file must have 'mascot_filename' and 'pd_filename' columns with no missing values.")
+    
+    mascot_df = ed[['mascot_filename', 'sample_name', 'search_date']].copy()
+    base_url = "https://mascot.proteomics.dundee.ac.uk/cgi/master_results_2.pl?file=../data/"
+
+    # Logic: base_url + search_date + "/F" + mascot_filename + ".dat"
+    mascot_df['mascot_link'] = mascot_df.apply(
+        lambda row: f"{base_url}{str(row['search_date'])}/{str(row['mascot_filename'])}.dat", 
+        axis=1
+    )
+    mascot_df.to_csv(paths.output_directory / 'mascot_links.csv', index=False)

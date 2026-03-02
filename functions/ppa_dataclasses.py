@@ -29,6 +29,10 @@ class configInfo:
     def __post_init__(self):
         # turn search_protein_list into list of strings
         self.search_protein_list = [str(item) for item in self.search_protein_list]
+        self.mascot_filenames = [
+            f"{str(name)}.mzid" if not str(name).endswith(".mzid") else str(name)
+            for name in self.mascot_filenames
+        ]
      
 
 
