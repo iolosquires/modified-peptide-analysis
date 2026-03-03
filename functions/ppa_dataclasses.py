@@ -33,6 +33,10 @@ class configInfo:
             f"{str(name)}.mzid" if not str(name).endswith(".mzid") else str(name)
             for name in self.mascot_filenames
         ]
+        self.pd_filenames = [
+            f"{str(name)}.txt" if not str(name).endswith(".txt") else str(name)
+            for name in self.pd_filenames
+        ]
      
 
 

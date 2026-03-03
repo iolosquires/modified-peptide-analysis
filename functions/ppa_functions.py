@@ -806,8 +806,9 @@ def find_phosphopeptides_in_mascot(df_wanted, config,search_record):
     )
     df_wanted["has_phospho"] = df_wanted["Modification"].apply(find_phospho_mod)
     df_wanted_phospho = df_wanted[df_wanted["has_phospho"]].copy()
+    df_wanted_non_phospho = df_wanted[~df_wanted["has_phospho"]].copy()
 
-    return df_wanted_phospho
+    return df_wanted_phospho, df_wanted_non_phospho
 
 
 def process_mascot_phospho_dataframe(df_wanted_phospho):

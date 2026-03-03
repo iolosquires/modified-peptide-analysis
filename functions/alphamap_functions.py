@@ -25,25 +25,39 @@ def create_assigned_mods(test):
 def open_read_experimental_design (input_directory):
     
     experimental_design_file = Path(input_directory) / "ExperimentalDesign.txt"
+    
     assert experimental_design_file.exists(), "experimental design file does not exist"
 
     ed = pd.read_csv(experimental_design_file, sep="\t")
     return ed
 
 
-def mascot_script_to_alphamap(df, protein_id, output_dir):
+def mascot_script_to_alphamap(df, protein_id, output_dir,df_wanted_non_phospho):
 
     df = df.copy()
-
-
+    
+    
     df['Protein ID'] = protein_id
     df['Assigned Modifications'] = df['Peptide'].apply(create_assigned_mods)
     df['Peptide'] = df['Peptide'].str.upper()
-
-    df = df.groupby(["Peptide","Assigned Modifications"], as_index = False).agg({
+    df2 = df[["Protein ID","Peptide","Assigned Modifications", "Charge State"]].copy()
+    df2 = df2.groupby(["Peptide","Assigned Modifications"], as_index = False).agg({
         "Protein ID" : "first",
-        "Charge State": (lambda x: ",".join(map(str, x))),
+        "Charge State": (lambda x: ",".join(map(str, x)))#,
         # for all other columns: turn into lists
-        **{col: "first" for col in df.columns if col not in ["Protein ID", "Peptide","Assigned Modifications","Charge State"]},
+        #**{col: "first" for col in df.columns if col not in ["Protein ID", "Peptide","Assigned Modifications","Charge State"]},
     })
-    df.to_csv(output_dir, index=False, sep = "\t")
+
+    dfnot = df_wanted_non_phospho[["PeptideSequence","chargeState"]].copy()
+    dfnot = dfnot.rename(columns={"PeptideSequence": "Peptide", "chargeState": "Charge State"})
+    dfnot['Protein ID'] = protein_id
+    dfnot2 = dfnot.groupby(["Peptide"], as_index = False).agg({
+        "Protein ID" : "first",
+        "Charge State": (lambda x: ",".join(map(str, x)))#,
+        # for all other columns: turn into lists
+        #**{col: "first" for col in df.columns if col not in ["Protein ID", "Peptide","Assigned Modifications","Charge State"]},
+    })
+
+    df3 = pd.concat([df2, dfnot2], ignore_index=True)
+
+    df3.to_csv(output_dir, index=False, sep = "\t")

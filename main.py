@@ -38,7 +38,7 @@ paths.output_directory.mkdir(parents=False, exist_ok=True)
 if config.create_old_plot:
     paths.plot_path.mkdir(parents=False, exist_ok=True)
 
-iolo.create_mascot_links_file(ed, paths)
+iolo.create_mascot_links(ed, paths)
 
 file_contains_phospho = []
 pd_file_contains_phospho = []
@@ -57,6 +57,7 @@ for mascot_filename, pd_filename, sample_name, search_record in zip(config.masco
     print(f"Processing sample: {sample_name}")
 
     mascot_df = iolo.import_mascot_file(mascot_filename, input_directory)
+
     df_wanted = iolo.filter_accession_and_score(mascot_df, config, search_record)
 
     if len(df_wanted) == 0:
@@ -67,10 +68,10 @@ for mascot_filename, pd_filename, sample_name, search_record in zip(config.masco
         merge_data_pdf.append("No peptides found")
         continue
 
-    df_wanted_phospho = iolo.find_phosphopeptides_in_mascot(df_wanted, config, search_record)
-
+    df_wanted_phospho, df_wanted_non_phospho = iolo.find_phosphopeptides_in_mascot(df_wanted, config, search_record)
     
-
+    df_wanted_non_phospho = df_wanted_non_phospho.drop_duplicates(subset=["PeptideSequence", "chargeState"])
+    
     if len(df_wanted_phospho) == 0:
         
         file_contains_phospho.append(False)
@@ -78,6 +79,7 @@ for mascot_filename, pd_filename, sample_name, search_record in zip(config.masco
         merged_data.append("No phosphopeptides found")
         merge_data_pdf.append("No phosphopeptides found")
         continue
+
 
     file_contains_phospho.append(True)
     df_phospho_grouped, phos_pep_lengths, phos_start_pos = (
@@ -187,6 +189,7 @@ for mascot_filename, pd_filename, sample_name, search_record in zip(config.masco
             merged.copy(),
             config.uniprot_id,
             paths.output_directory / (mascot_savename + "_for_alphamap.tsv"),
+            df_wanted_non_phospho
         )
 
     # case where no pd file is given or no phosphopeptides in pd file
