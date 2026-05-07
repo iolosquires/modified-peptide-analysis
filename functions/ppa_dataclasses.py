@@ -2,6 +2,8 @@ import dataclasses
 import functions.ppa_functions as iolo
 import re
 
+script_dir = r"Z:\proteinchem\IoloSquires\00-Projects\OwnProjects\modified-peptide-analysis"
+
 
 @dataclasses.dataclass
 class proteinRecord:
@@ -55,7 +57,7 @@ class configPathInfo:
     def __post_init__(self):
         # self.input_directory = str(self.input_directory)
         self.output_directory = self.input_directory / "output"
-        self.logo_file = iolo.get_logo_file()
+        self.logo_file = iolo.get_logo_file(script_dir)
         self.log_file = self.output_directory / "run.log"
         self.plot_path = self.output_directory / "plots"
         self.mrc_db_path = "Z:/proteinchem/CURRENT MRC DATABASE/" + self.mrc_db

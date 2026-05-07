@@ -356,7 +356,7 @@ def vis_psites(
 
 
 def mascot_file_check(mascot_filename, input_dir):
-    mascot_file = str(input_dir) + "//" + mascot_filename
+    mascot_file = str(input_dir) + "//SearchOutput//" + mascot_filename
 
     assert Path(mascot_file).exists(), "mascot file %s does not exist" % mascot_filename
 
@@ -543,8 +543,8 @@ def get_phospho_positions(mod_dict_list):
     return phos_position
 
 
-def get_logo_file():
-    logo_file = Path(os.getcwd()) / "logo" / "ppu_logo.png"
+def get_logo_file(script_dir):
+    logo_file = Path(script_dir) / "logo" / "ppu_logo.png"
 
     assert logo_file.exists(), "logo file does not exist"
 
